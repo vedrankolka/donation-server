@@ -56,6 +56,7 @@ type ErrorResponse struct {
 }
 
 func handleConfig(w http.ResponseWriter, r *http.Request) {
+	log.Println("/config called.")
 	if r.Method != "GET" {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
