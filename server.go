@@ -25,6 +25,7 @@ func main() {
 	}
 
 	stripe.Key = os.Getenv("STRIPE_SECRET_KEY")
+	port := os.Getenv("PORT")
 
 	// For sample support and debugging, not required for production:
 	stripe.SetAppInfo(&stripe.AppInfo{
@@ -38,8 +39,8 @@ func main() {
 	http.HandleFunc("/create-payment-intent", handleCreatePaymentIntent)
 	http.HandleFunc("/webhook", handleWebhook)
 
-	log.Println("server running at 0.0.0.0:4242")
-	http.ListenAndServe("0.0.0.0:4242", nil)
+	log.Println("server running at 0.0.0.0:" + port)
+	http.ListenAndServe("0.0.0.0:"+port, nil)
 }
 
 // ErrorResponseMessage represents the structure of the error
