@@ -55,7 +55,12 @@ type ErrorResponse struct {
 	Error *ErrorResponseMessage `json:"error"`
 }
 
+func enableCors(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+}
+
 func handleConfig(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	log.Println("/config called.")
 	if r.Method != "GET" {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -69,7 +74,7 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCreatePaymentIntent(w http.ResponseWriter, r *http.Request) {
-
+	enableCors(&w)
 	amount, err := getAmount(r)
 	log.Printf("amount = %d\n", amount)
 
@@ -109,6 +114,7 @@ func handleCreatePaymentIntent(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleWebhook(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	log.Println("Webhook is called.")
 	if r.Method != "POST" {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
