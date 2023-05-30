@@ -17,7 +17,7 @@ import (
 	"github.com/stripe/stripe-go/v72/client"
 	"github.com/stripe/stripe-go/v72/paymentintent"
 	"github.com/stripe/stripe-go/v72/webhook"
-	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/vedrankolka/donation-server/pkg/notifier"
 )
 
 // ErrorResponseMessage represents the structure of the error
@@ -36,16 +36,15 @@ type DonationHandler struct {
 	publishableKey string
 	webhookSecret  string
 	stripeClient   *client.API
-	kafkaClient    *kgo.Client
-	customerTopic  string
+	notifier       notifier.Notifier
 }
 
 const (
 	Currency = "EUR"
-	Timeout  = 500 * time.Millisecond
+	Timeout  = 1 * time.Second
 )
 
-func NewHandler(publishableKey, webhookSecret, customerTopic string, kafkaClient *kgo.Client) (*DonationHandler, error) {
+func NewHandler(publishableKey, webhookSecret string, notifier notifier.Notifier) (*DonationHandler, error) {
 	if publishableKey == "" {
 		return nil, errors.New("a publishableKey cannot be empty.")
 	}
@@ -57,9 +56,8 @@ func NewHandler(publishableKey, webhookSecret, customerTopic string, kafkaClient
 	return &DonationHandler{
 		publishableKey: publishableKey,
 		webhookSecret:  webhookSecret,
-		customerTopic:  customerTopic,
 		stripeClient:   client.New(stripe.Key, nil),
-		kafkaClient:    kafkaClient,
+		notifier:       notifier,
 	}, nil
 }
 
@@ -124,6 +122,7 @@ func (dh *DonationHandler) HandleCreatePaymentIntent(w http.ResponseWriter, r *h
 	})
 }
 
+// HandleWebhook handles an event of a completed checkout.
 func (dh *DonationHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	dh.enableCors(&w)
 	log.Println("Webhook is called.")
@@ -163,34 +162,21 @@ func (dh *DonationHandler) HandleWebhook(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		data, err := json.Marshal(customer)
-		if err != nil {
-			log.Printf("Could not marshal customer %q: %v", customer.ID, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		record := kgo.Record{
-			Key:   []byte(customer.ID),
-			Value: data,
-			Topic: dh.customerTopic,
+		donationEvent := notifier.DonationEvent{
+			CustomerID:    customer.ID,
+			CustomerName:  customer.Name,
+			CustomerEmail: customer.Email,
+			Amount:        event.Data.Object["amount_total"].(float64),
+			Currency:      event.Data.Object["currency"].(string),
 		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), Timeout)
 		defer cancel()
-		result := dh.kafkaClient.ProduceSync(ctx, &record)
-		if result == nil {
-			log.Printf("Result of producing to %q is nil!\n", dh.customerTopic)
-			http.Error(w, "Could not produce to customer topic.", http.StatusInternalServerError)
-			return
-		}
-		sent, err := result.First()
-		if result.FirstErr(); err != nil {
-			log.Printf("Failed to produce record: %v", err)
+
+		if err := dh.notifier.Notify(ctx, donationEvent); err != nil {
+			log.Printf("Failed to notify about donation: %v\n", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
-		} else {
-			log.Printf("Sent with offset: %d", sent.Offset)
 		}
 	}
 
