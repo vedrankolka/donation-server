@@ -41,7 +41,7 @@ type DonationHandler struct {
 
 const (
 	Currency = "EUR"
-	Timeout  = 1 * time.Second
+	Timeout  = 2 * time.Second
 )
 
 func NewHandler(publishableKey, webhookSecret string, notifier notifier.Notifier) (*DonationHandler, error) {
@@ -146,27 +146,37 @@ func (dh *DonationHandler) HandleWebhook(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if event.Type == "checkout.session.completed" {
-		log.Println("Checkout Session completed!")
-		customerId, ok := event.Data.Object["customer"].(string)
-		if !ok {
-			log.Printf("Failed to read customer id: %v", err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+	if event.Type != "charge.succeeded" {
+		log.Printf("This webhook handles charge.succeeded, but got %q\n", event.Type)
+	} else {
+		log.Println("charge.succeeded!")
 
-		customer, err := dh.stripeClient.Customers.Get(customerId, &stripe.CustomerParams{})
+		// Get the customer if it exists.
+		customer, err := dh.getCustomer(event)
 		if err != nil {
-			log.Printf("could not fetch customer with id %q: %v", customerId, err)
+			log.Printf("Could not fetch customer received event: %v\n", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+		// If the customer does not exist, create it.
+		if customer == nil {
+			customer, err = dh.createCustomer(event)
+			if err != nil {
+				log.Printf("Could not create customer: %v", err)
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			log.Printf("Created new customer with id %q and email %q\n", customer.ID, customer.Email)
+		} else {
+			log.Printf("Found existing customer with id %q and email %q\n", customer.ID, customer.Email)
 		}
 
 		donationEvent := notifier.DonationEvent{
 			CustomerID:    customer.ID,
 			CustomerName:  customer.Name,
 			CustomerEmail: customer.Email,
-			Amount:        event.Data.Object["amount_total"].(float64),
+			Amount:        event.Data.Object["amount"].(float64),
 			Currency:      event.Data.Object["currency"].(string),
 		}
 
@@ -181,6 +191,87 @@ func (dh *DonationHandler) HandleWebhook(w http.ResponseWriter, r *http.Request)
 	}
 
 	dh.writeJSON(w, nil)
+}
+
+func (dh *DonationHandler) createCustomer(event stripe.Event) (*stripe.Customer, error) {
+	billingDetails, ok := event.Data.Object["billing_details"].(map[string]interface{})
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("Could not read billing_details: %v", billingDetails))
+	}
+
+	email, ok := billingDetails["email"].(string)
+	if !ok {
+		return nil, errors.New("Email could not be read from billing_details.")
+	}
+	name, ok := billingDetails["name"].(string)
+	if !ok {
+		return nil, errors.New("Name could not be read from billing_details.")
+	}
+
+	if email == "" || name == "" {
+		return nil, errors.New("Cannot create customer with no email address and name.")
+	}
+
+	return dh.stripeClient.Customers.New(&stripe.CustomerParams{
+		Email: stripe.String(email),
+		Name:  stripe.String(name),
+	})
+}
+
+func (dh *DonationHandler) getCustomer(event stripe.Event) (*stripe.Customer, error) {
+	var customer *stripe.Customer
+	// Try to get the customer by ID.
+	customerId, ok := event.Data.Object["customer"].(string)
+	if ok {
+		var err error
+		customer, err = dh.stripeClient.Customers.Get(customerId, &stripe.CustomerParams{})
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("Could not fetch customer by ID %q", customerId))
+		}
+	} else {
+		// Try to get customer by email.
+		billingDetails, ok := event.Data.Object["billing_details"].(map[string]interface{})
+		if !ok {
+			return nil, errors.New("Could not read billing_detials from event.")
+		}
+
+		email, ok := billingDetails["email"].(string)
+		if !ok {
+			return nil, errors.New("Could not read email from billing_details.")
+		}
+
+		iter := dh.stripeClient.Customers.List(&stripe.CustomerListParams{
+			Email: stripe.String(email),
+		})
+
+		if iter.Err() != nil {
+			return nil, errors.New(fmt.Sprintf("Could not fetch customers by email %q: %v", email, iter.Err()))
+		}
+
+		customerList := iter.CustomerList().Data
+		if len(customerList) == 0 {
+			return nil, nil
+		} else if len(customerList) == 1 {
+			return customerList[0], nil
+		} else {
+			// Find the first on with the entered name.
+			name, ok := billingDetails["email"].(string)
+			if !ok {
+				return nil, errors.New("Could not read name from billing_details.")
+			}
+
+			for _, c := range customerList {
+				if c.Name == name {
+					return c, nil
+				}
+			}
+			// If no customer matched by name,
+			// conclude email is enough and return the first one.
+			return customerList[0], nil
+		}
+	}
+
+	return customer, nil
 }
 
 func (dh *DonationHandler) writeJSON(w http.ResponseWriter, v interface{}) {

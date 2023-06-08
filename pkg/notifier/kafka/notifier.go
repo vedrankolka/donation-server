@@ -36,8 +36,6 @@ func (kn *KafkaNotifier) Close() error {
 func NewKafkaNotifier(bootstrapServers []string, topic, username, password string) (*KafkaNotifier, error) {
 	log.Println("bootstrapServers: ", bootstrapServers)
 	log.Println("topic: ", topic)
-	log.Println("username: ", username)
-	log.Println("password: ", password)
 
 	var dialer *kafka.Dialer
 	if username == "" && password == "" {
