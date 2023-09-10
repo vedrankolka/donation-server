@@ -72,6 +72,7 @@ which means Docker should be running.
 - [x] rewrite README
 - [x] extract some variables as constants
 - [ ] move customer creation out of the Webhook, but where? To another webhook? It might stay as is.
+- [x] wrap http handlers to allow CORS
 
 ## Note to self
 You have the whole thing documented on your tablet.

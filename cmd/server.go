@@ -49,8 +49,8 @@ func main() {
 		log.Fatalf("Could not create DonationHandler: %v", err)
 	}
 
-	http.HandleFunc("/config", donationHandler.HandleConfig)
-	http.HandleFunc("/create-payment-intent", donationHandler.HandleCreatePaymentIntent)
+	http.HandleFunc("/config", allowCors(donationHandler.HandleConfig))
+	http.HandleFunc("/create-payment-intent", allowCors(donationHandler.HandleCreatePaymentIntent))
 	if bootstrapServers != "" {
 		http.HandleFunc("/webhook", donationHandler.HandleWebhook)
 	}
@@ -58,5 +58,12 @@ func main() {
 	log.Println("server running at 0.0.0.0:" + port)
 	if err := http.ListenAndServe("0.0.0.0:"+port, nil); err != nil {
 		log.Fatal(err)
+	}
+}
+
+func allowCors(next func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		next(w, r)
 	}
 }

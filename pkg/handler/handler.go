@@ -61,14 +61,8 @@ func NewHandler(publishableKey, webhookSecret string, notifier notifier.Notifier
 	}, nil
 }
 
-// enableCors enables CORS.
-func (dh *DonationHandler) enableCors(w *http.ResponseWriter) {
-	(*w).Header().Set("Access-Control-Allow-Origin", "*")
-}
-
 // HandleConfig returns the public key for creating a PaymentIntent.
 func (dh *DonationHandler) HandleConfig(w http.ResponseWriter, r *http.Request) {
-	dh.enableCors(&w)
 	log.Println("/config called.")
 	if r.Method != "GET" {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -83,7 +77,6 @@ func (dh *DonationHandler) HandleConfig(w http.ResponseWriter, r *http.Request) 
 
 // HandleCreatePaymentIntent creates a payment intent.
 func (dh *DonationHandler) HandleCreatePaymentIntent(w http.ResponseWriter, r *http.Request) {
-	dh.enableCors(&w)
 	amount, err := getAmount(r)
 	if err != nil || amount < 1 {
 		log.Printf("Amount was not set correctly %v\n", err)
@@ -124,7 +117,6 @@ func (dh *DonationHandler) HandleCreatePaymentIntent(w http.ResponseWriter, r *h
 
 // HandleWebhook handles an event of a completed checkout.
 func (dh *DonationHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
-	dh.enableCors(&w)
 	log.Println("Webhook is called.")
 	if r.Method != "POST" {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
