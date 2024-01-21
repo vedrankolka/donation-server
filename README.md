@@ -69,10 +69,12 @@ The `vm-size` specifies the small (free) machine, while `local-only` flag specif
 which means Docker should be running.
 
 ## TODO
+
 - [x] rewrite README
 - [x] extract some variables as constants
 - [ ] move customer creation out of the Webhook, but where? To another webhook? It might stay as is.
 - [x] wrap http handlers to allow CORS
 
 ## Note to self
+
 You have the whole thing documented on your tablet.
