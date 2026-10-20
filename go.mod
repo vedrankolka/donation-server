@@ -1,6 +1,6 @@
 module github.com/vedrankolka/donation-server
 
-go 1.17
+go 1.24
 
 require (
 	github.com/joho/godotenv v1.4.0
@@ -9,7 +9,7 @@ require (
 )
 
 require (
-	github.com/klauspost/compress v1.16.3 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/pierrec/lz4/v4 v4.1.17 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect
